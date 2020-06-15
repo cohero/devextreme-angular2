@@ -1,17 +1,20 @@
 import { QueryList, ElementRef, Renderer2, EventEmitter } from '@angular/core';
-import { ɵgetDOM as getDOM } from '@angular/platform-browser';
 
 import { DX_TEMPLATE_WRAPPER_CLASS } from './template';
 import { getElement } from './utils';
 
+import render from 'devextreme/core/renderer';
 import * as events from 'devextreme/events';
+import * as domAdapter from 'devextreme/core/dom_adapter';
 
 const VISIBILITY_CHANGE_SELECTOR = 'dx-visibility-change-handler';
 
 export interface INestedOptionContainer {
     instance: any;
     isLinked: boolean;
+    removedNestedComponents: string[];
     optionChangedHandlers: EventEmitter<any>;
+    recreatedNestedComponents: any[];
 }
 
 export interface IOptionPathGetter { (): string; }
@@ -58,10 +61,27 @@ export abstract class BaseNestedOption implements INestedOptionContainer, IColle
 
     protected _setOption(name: string, value: any) {
         if (this.isLinked) {
-            this.instance.option(this._fullOptionPath() + name, value);
+            const fullPath = this._fullOptionPath() + name;
+            this.instance.option(fullPath, value);
         } else {
             this._initialOptions[name] = value;
         }
+    }
+
+    protected _addRemovedOption(name: string) {
+        if (this.instance && this.removedNestedComponents) {
+            this.removedNestedComponents.push(name);
+        }
+    }
+
+    protected _addRecreatedComponent() {
+        if (this.instance && this.recreatedNestedComponents) {
+            this.recreatedNestedComponents.push({ getOptionPath: () =>  this._getOptionPath() });
+        }
+    }
+
+    protected _getOptionPath() {
+        return this._hostOptionPath() + this._optionPath;
     }
 
     setHost(host: INestedOptionContainer, optionPath: IOptionPathGetter) {
@@ -80,6 +100,14 @@ export abstract class BaseNestedOption implements INestedOptionContainer, IColle
 
     get instance() {
         return this._host && this._host.instance;
+    }
+
+    get removedNestedComponents() {
+        return this._host && this._host.removedNestedComponents;
+    }
+
+    get recreatedNestedComponents() {
+        return this._host && this._host.recreatedNestedComponents;
     }
 
     get isLinked() {
@@ -125,7 +153,7 @@ export abstract class NestedOption extends BaseNestedOption {
     }
 
     protected _fullOptionPath() {
-        return this._hostOptionPath() + this._optionPath + '.';
+        return this._getOptionPath() + '.';
     }
 }
 
@@ -138,7 +166,7 @@ export abstract class CollectionNestedOption extends BaseNestedOption implements
     _index: number;
 
     protected _fullOptionPath() {
-        return this._hostOptionPath() + this._optionPath + '[' + this._index + ']' + '.';
+        return `${this._getOptionPath()}[${this._index}].`;
     }
 
     get _value() {
@@ -157,7 +185,7 @@ export interface IOptionWithTemplate extends BaseNestedOption {
 let triggerShownEvent = function(element) {
     let changeHandlers = [];
 
-    if (getDOM().hasClass(element, VISIBILITY_CHANGE_SELECTOR)) {
+    if (!render(element).hasClass(VISIBILITY_CHANGE_SELECTOR)) {
         changeHandlers.push(element);
     }
 
@@ -190,7 +218,7 @@ export function extractTemplate(option: IOptionWithTemplate, element: ElementRef
         render: (renderData) => {
             let result = element.nativeElement;
 
-            renderer.addClass(result, DX_TEMPLATE_WRAPPER_CLASS);
+            domAdapter.setClass(result, DX_TEMPLATE_WRAPPER_CLASS, true);
 
             if (renderData.container) {
                 let container = getElement(renderData.container);
@@ -215,6 +243,10 @@ export function extractTemplate(option: IOptionWithTemplate, element: ElementRef
 export class NestedOptionHost {
     private _host: INestedOptionContainer;
     private _optionPath: IOptionPathGetter;
+
+    getHost(): INestedOptionContainer {
+        return this._host;
+    }
 
     setHost(host: INestedOptionContainer, optionPath?: IOptionPathGetter) {
         this._host = host;

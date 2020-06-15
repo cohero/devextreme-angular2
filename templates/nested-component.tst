@@ -3,7 +3,9 @@
 <#? it.inputs #>/* tslint:disable:use-input-property-decorator */
 <#?#>
 import {
-    Component,
+    Component,<#? !it.isCollection #>
+    OnInit,
+    OnDestroy,<#?#>
     NgModule,
     Host,<#? it.hasTemplate #>
     ElementRef,
@@ -24,9 +26,13 @@ import {
 <#? it.isDevExpressRequired #>
 import DevExpress from 'devextreme/bundles/dx.all';<#?#>
 
-import { NestedOptionHost<#? it.hasTemplate #>, extractTemplate<#?#> } from '../../core/nested-option';<#? it.hasTemplate #>
-import { DxTemplateDirective } from '../../core/template';
-import { IDxTemplateHost, DxTemplateHost } from '../../core/template-host';<#?#>
+import {
+    NestedOptionHost,<#? it.hasTemplate #>
+    extractTemplate,<#?#><#? it.hasTemplate #>
+    DxTemplateDirective,
+    IDxTemplateHost,
+    DxTemplateHost<#?#>
+} from 'devextreme-angular/core';
 import { <#= it.baseClass #> } from '<#= it.basePath #>';
 <#~ it.collectionNestedComponents :component:i #><#? component.className !== it.className #>import { <#= component.className #>Component } from './<#= component.path #>';
 <#?#><#~#>
@@ -40,7 +46,8 @@ import { <#= it.baseClass #> } from '<#= it.basePath #>';
         '<#= input.name #>'<#? i < it.inputs.length-1 #>,<#?#><#~#>
     ]<#?#>
 })
-export class <#= it.className #>Component extends <#= it.baseClass #><#? it.hasTemplate #> implements AfterViewInit, IDxTemplateHost<#?#> {<#~ it.properties :prop:i #>
+export class <#= it.className #>Component extends <#= it.baseClass #><#? it.hasTemplate #> implements AfterViewInit,<#? !it.isCollection #> OnDestroy, OnInit,<#?#>
+    IDxTemplateHost<#?#><#? !it.isCollection && !it.hasTemplate #> implements OnDestroy, OnInit <#?#> {<#~ it.properties :prop:i #>
     @Input()
     get <#= prop.name #>(): <#= prop.type #> {
         return this._getOption('<#= prop.name #>');
@@ -97,6 +104,15 @@ export class <#= it.className #>Component extends <#= it.baseClass #><#? it.hasT
     }
     ngAfterViewInit() {
         extractTemplate(this, this.element, this.renderer, this.document);
+    }
+<#?#>
+<#? !it.isCollection #>
+    ngOnInit() {
+        this._addRecreatedComponent();
+    }
+
+    ngOnDestroy() {
+        this._addRemovedOption(this._getOptionPath());
     }
 <#?#>
 }

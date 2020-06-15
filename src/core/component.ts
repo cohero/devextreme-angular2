@@ -14,7 +14,6 @@ import {
     AfterViewInit
 } from '@angular/core';
 
-import { ɵgetDOM as getDOM } from '@angular/platform-browser';
 import { isPlatformServer } from '@angular/common';
 import { TransferState, makeStateKey } from '@angular/platform-browser';
 
@@ -22,7 +21,9 @@ import { DxTemplateDirective } from './template';
 import { IDxTemplateHost, DxTemplateHost } from './template-host';
 import { EmitterHelper, NgEventsStrategy } from './events-strategy';
 import { WatcherHelper } from './watcher-helper';
+import * as domAdapter from 'devextreme/core/dom_adapter';
 import * as events from 'devextreme/events';
+
 import {
     INestedOptionContainer,
     ICollectionNestedOption,
@@ -30,7 +31,14 @@ import {
     CollectionNestedOptionContainerImpl
 } from './nested-option';
 
-export const IS_PLATFORM_SERVER = makeStateKey<any>('DX_isPlatformServer');
+let serverStateKey;
+export const getServerStateKey = () => {
+  if (!serverStateKey) {
+    serverStateKey = makeStateKey<any>('DX_isPlatformServer');
+  }
+
+  return serverStateKey;
+};
 
 export abstract class DxComponent implements OnChanges, OnInit, DoCheck, AfterContentChecked, AfterViewInit,
     INestedOptionContainer, ICollectionNestedOptionContainer, IDxTemplateHost {
@@ -43,7 +51,8 @@ export abstract class DxComponent implements OnChanges, OnInit, DoCheck, AfterCo
     instance: any;
     isLinked = true;
     changedOptions = {};
-    createInstanceOnInit = true;
+    removedNestedComponents = [];
+    recreatedNestedComponents: any[];
     widgetUpdateLocked = false;
 
     private _initTemplates() {
@@ -71,10 +80,10 @@ export abstract class DxComponent implements OnChanges, OnInit, DoCheck, AfterCo
     }
 
     private _initPlatform() {
-        if (this.transferState.hasKey(IS_PLATFORM_SERVER)) {
-            this._initialOptions.integrationOptions.renderedOnServer = this.transferState.get(IS_PLATFORM_SERVER, null);
+        if (this.transferState.hasKey(getServerStateKey())) {
+            this._initialOptions.integrationOptions.renderedOnServer = this.transferState.get(getServerStateKey(), null);
         } else if (isPlatformServer(this.platformId)) {
-            this.transferState.set(IS_PLATFORM_SERVER, true);
+            this.transferState.set(getServerStateKey(), true);
         }
     }
 
@@ -154,12 +163,8 @@ export abstract class DxComponent implements OnChanges, OnInit, DoCheck, AfterCo
         this._initPlatform();
         this._initOptions();
 
-        let createInstanceOnInit = this.createInstanceOnInit;
-
         this._initialOptions.onInitializing = function () {
-            if (createInstanceOnInit) {
-                this.beginUpdate();
-            }
+            this.beginUpdate();
         };
         this.instance = this._createInstance(element, this._initialOptions);
         this._initEvents();
@@ -167,11 +172,12 @@ export abstract class DxComponent implements OnChanges, OnInit, DoCheck, AfterCo
     }
 
     protected _destroyWidget() {
+        this.removedNestedComponents = [];
         if (this.instance) {
             let element = this.instance.element();
             events.triggerHandler(element, 'dxremove', { _angularIntegration: true });
             this.instance.dispose();
-            getDOM().remove(element);
+            domAdapter.removeElement(element);
         }
     }
 
@@ -197,9 +203,7 @@ export abstract class DxComponent implements OnChanges, OnInit, DoCheck, AfterCo
     }
 
     ngOnInit() {
-        if (this.createInstanceOnInit) {
-            this._createWidget(this.element.nativeElement);
-        }
+        this._createWidget(this.element.nativeElement);
     }
 
     ngDoCheck() {
@@ -208,14 +212,14 @@ export abstract class DxComponent implements OnChanges, OnInit, DoCheck, AfterCo
 
     ngAfterContentChecked() {
         this.applyOptions();
+        this.resetOptions();
         this.unlockWidgetUpdate();
     }
 
     ngAfterViewInit() {
         this._initTemplates();
-        if (this.createInstanceOnInit) {
-            this.instance.endUpdate();
-        }
+        this.instance.endUpdate();
+        this.recreatedNestedComponents = [];
     }
 
     applyOptions() {
@@ -227,6 +231,23 @@ export abstract class DxComponent implements OnChanges, OnInit, DoCheck, AfterCo
         }
     }
 
+    resetOptions() {
+        if (this.instance) {
+            this.removedNestedComponents.forEach(option => {
+                if (option && !this.isRecreated(option)) {
+                    this.instance.resetOption(option);
+                }
+            });
+            this.removedNestedComponents = [];
+            this.recreatedNestedComponents = [];
+        }
+    }
+
+    isRecreated(name: string): boolean {
+        return this.recreatedNestedComponents &&
+                this.recreatedNestedComponents.some(nestedComponent => nestedComponent.getOptionPath() === name);
+    }
+
     setTemplate(template: DxTemplateDirective) {
         this.templates.push(template);
     }
@@ -236,8 +257,16 @@ export abstract class DxComponent implements OnChanges, OnInit, DoCheck, AfterCo
     }
 }
 
-export abstract class DxComponentExtension extends DxComponent {
+export abstract class DxComponentExtension extends DxComponent implements OnInit, AfterViewInit {
     createInstance(element: any) {
         this._createWidget(element);
+    }
+
+    ngOnInit() {
+    }
+
+    ngAfterViewInit() {
+        this._createWidget(this.element.nativeElement);
+        this.instance.endUpdate();
     }
 }

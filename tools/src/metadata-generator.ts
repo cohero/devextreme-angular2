@@ -170,7 +170,7 @@ export default class DXComponentMetadataGenerator {
         return {
             emit: `${name}Change`,
             type: `EventEmitter<${type}>`,
-            description: `A handler for the ${name}Change event.`
+            description: `This member supports the internal infrastructure and is not intended to be used directly from your code.`
         };
     }
 
@@ -460,7 +460,7 @@ export default class DXComponentMetadataGenerator {
                         className: component.baseClass,
                         path: this.getBaseComponentPath(component),
                         baseClass: component.isCollection ? 'CollectionNestedOption' : 'NestedOption',
-                        basePath: '../../../core/nested-option',
+                        basePath: 'devextreme-angular/core',
                         isDevExpressRequired: component.isDevExpressRequired
                     });
                 }
@@ -487,7 +487,7 @@ export default class DXComponentMetadataGenerator {
                     component.basePath = `./base/${this.getBaseComponentPath(component)}`;
                 } else {
                     component.baseClass = component.isCollection ? 'CollectionNestedOption' : 'NestedOption';
-                    component.basePath = '../../core/nested-option';
+                    component.basePath = 'devextreme-angular/core';
                     component.hasSimpleBaseClass = true;
                 }
 
